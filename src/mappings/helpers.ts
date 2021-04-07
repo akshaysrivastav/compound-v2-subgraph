@@ -45,6 +45,7 @@ export function createAccount(accountID: string): Account {
   account.countLiquidated = 0
   account.countLiquidator = 0
   account.hasBorrowed = false
+  account.health = BigDecimal.fromString('0')
   account.save()
   return account
 }

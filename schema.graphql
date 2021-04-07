@@ -88,7 +88,7 @@ type Account @entity {
     # They do not need to be in the schema, but they will show up in the explorer playground
 
     # "If less than 1, the account can be liquidated
-    # health: BigDecimal!
+    health: BigDecimal!
     # "Total assets supplied by user"
     # totalBorrowValueInEth: BigDecimal!
     # "Total assets borrowed from user"

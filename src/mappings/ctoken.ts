@@ -19,6 +19,7 @@ import {
   TransferEvent,
   BorrowEvent,
   RepayEvent,
+  AccountCToken,
 } from '../types/schema'
 
 import { createMarket, updateMarket } from './markets'
@@ -29,6 +30,8 @@ import {
   cTokenDecimalsBD,
   cTokenDecimals,
 } from './helpers'
+import { BigDecimal, BigInt } from '@graphprotocol/graph-ts'
+import { log } from '@graphprotocol/graph-ts'
 
 /* Account supplies assets into market and receives cTokens in exchange
  *
@@ -178,6 +181,68 @@ export function handleBorrow(event: Borrow): void {
   borrow.blockTime = event.block.timestamp.toI32()
   borrow.underlyingSymbol = market.underlyingSymbol
   borrow.save()
+
+  // XX - More fields in Account
+  account = Account.load(accountID)
+
+  let totalBorrowValueInEth = BigDecimal.fromString('0')
+  let totalCollateralValueInEth = BigDecimal.fromString('0')
+  // let borrowBalUnderlying = BigDecimal.fromString('0');
+
+  let accountCTokens = account.tokens // failing here
+
+  if (account.hasBorrowed) {
+    // borrowBalUnderlying
+    // for (let i = 0; i < accountCTokens.length; i++) {
+    //   let token = accountCTokens[i];
+    //   let accountCtoken = AccountCToken.load(token);
+    //   let singleMarket = Market.load(accountCtoken.market);
+
+    //   if (!(accountCtoken.accountBorrowIndex).equals(BigDecimal.fromString('0'))) {
+    //     borrowBalUnderlying = borrowBalUnderlying.plus((accountCtoken.storedBorrowBalance)
+    //       .times(singleMarket.borrowIndex)
+    //       .div(accountCtoken.accountBorrowIndex));
+    //   }
+    // };
+
+    // totalBorrowValueInEth
+    for (let i = 0; i < accountCTokens.length; i++) {
+      let token = accountCTokens[i]
+      let accountCtoken = AccountCToken.load(token)
+      let singleMarket = Market.load(accountCtoken.market)
+
+      if (!accountCtoken.accountBorrowIndex.equals(BigDecimal.fromString('0'))) {
+        let borrowBalUnderlyingCtoken = accountCtoken.storedBorrowBalance
+          .times(singleMarket.borrowIndex)
+          .div(accountCtoken.accountBorrowIndex)
+        totalBorrowValueInEth = totalBorrowValueInEth.plus(
+          singleMarket.underlyingPrice.times(borrowBalUnderlyingCtoken),
+        )
+      }
+    }
+
+    // totalCollateralValueInEth
+    for (let i = 0; i < accountCTokens.length; i++) {
+      let token = accountCTokens[i]
+      let accountCtoken = AccountCToken.load(token)
+      let singleMarket = Market.load(accountCtoken.market)
+
+      let tokenInEth = singleMarket.collateralFactor
+        .times(singleMarket.exchangeRate)
+        .times(singleMarket.underlyingPrice)
+
+      totalCollateralValueInEth = totalCollateralValueInEth.plus(
+        tokenInEth.times(accountCtoken.cTokenBalance),
+      )
+    }
+
+    // set account health
+    account.health = totalBorrowValueInEth.equals(BigDecimal.fromString('0'))
+      ? totalCollateralValueInEth
+      : totalCollateralValueInEth.div(totalBorrowValueInEth)
+  }
+
+  account.save()
 }
 
 /* Repay some amount borrowed. Anyone can repay anyones balance
